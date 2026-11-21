@@ -176,10 +176,57 @@ app.get("/users", (req: Request, res: Response) => {
 
 app.get("/products", (req: Request, res: Response) => {
   const category = req.query.category;
+  const price = Number(req.query.price);
+  const minPrice = Number(req.query.minPrice);
+  const maxPrice = Number(req.query.maxPrice);
+
+  if(price) {
+    const productsByPrice = products.filter((p) => p.price >= price);
+    
+    res
+      .status(200)
+      .json({
+        message: `products with price --- ${price} retrieved successfull`,
+        data: productsByPrice,
+      });
+  }
+
+  if (minPrice && maxPrice) {
+    const productsByPriceRange = products.filter((p) => p.price >= minPrice && p.price <= maxPrice);
+
+    res
+      .status(200)
+      .json({
+        message: `products with price range --- ${minPrice} to ${maxPrice} retrieved successfull`,
+        data: productsByPriceRange,
+      });
+  }
+
+  if(minPrice) {
+    const productsByMinPrice = products.filter((p) => p.price >= minPrice);
+    
+    res
+      .status(200)
+      .json({
+        message: `products with min price --- ${minPrice} retrieved successfull`,
+        data: productsByMinPrice,
+      });
+  }
+
+  if (maxPrice) {
+    const productsByMaxPrice = products.filter((p) => p.price <= maxPrice);
+
+    res
+      .status(200)
+      .json({
+        message: `products with max price --- ${maxPrice} retrieved successfull`,
+        data: productsByMaxPrice,
+      });
+  }
 
   if (category) {
     const productByCategories = products.filter((p) => p.category === category);
-
+    
     res
       .status(200)
       .json({
@@ -209,17 +256,17 @@ app.get("/products/:id", (req: Request, res: Response) => {
     });
 });
 
-app.get("/price", (req: Request, res: Response) => {
-  const price = Number(req.query.price);
+// app.get("/price", (req: Request, res: Response) => {
+//   const price = Number(req.query.price);
 
-  const productsByPrice = products.filter((p) => p.price === price);
+//   const productsByPrice = products.filter((p) => p.price >= price);
 
-  res.status(200).json({
-    message: `Products with price --- ${price} retrieved successfully`,
-    data: productsByPrice,
-  });
-});
+//   res.status(200).json({
+//     message: `Products with price --- ${price} retrieved successfully`,
+//     data: productsByPrice,
+//   });
+// });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// app.listen(PORT, () => {
+//   console.log(`Server is running on port ${PORT}`);
+// });
