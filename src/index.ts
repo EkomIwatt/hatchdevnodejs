@@ -2,7 +2,47 @@ import express, { Request, Response } from "express";
 
 const app = express();
 const PORT = 5000;
-const products = [
+
+import { Sequelize } from 'sequelize';
+const sequelize = new Sequelize('hatchdev-4', 'postgres', '**ekOmzI11', {
+  host: 'localhost',
+  dialect: 'postgres'
+});
+
+app.use(express.json());
+
+
+const logger = (req: Request, res: Response, next: () => void) => {
+  console.log(`${req.method} ${req.url} at ${new Date().toISOString()}`);
+  next();
+}
+
+app.use(logger);
+
+
+
+type Product = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  discountPrice: number | null;
+  category: string;
+  brand: string;
+  sku: string;
+  stock: number;
+  rating: number;
+  reviews: number;
+  images: string[];
+  colors: string[];
+  sizes?: number[];
+  isFeatured: boolean;
+  isAvailable: boolean;
+  createdAt: string;
+};
+
+const products: Product[] = [
   {
     id: 1,
     name: "Wireless Bluetooth Headphones",
@@ -175,85 +215,60 @@ app.get("/users", (req: Request, res: Response) => {
 });
 
 app.get("/products", (req: Request, res: Response) => {
-  const category = req.query.category;
+  const category = req.query.category as string | undefined;
   const price = Number(req.query.price);
   const minPrice = Number(req.query.minPrice);
   const maxPrice = Number(req.query.maxPrice);
+  //const priceRange = req.query.priceRange as string | undefined;
 
-  if(price) {
-    const productsByPrice = products.filter((p) => p.price >= price);
-    
-    res
-      .status(200)
-      .json({
-        message: `products with price --- ${price} retrieved successfull`,
-        data: productsByPrice,
-      });
+  // Start with every product, then narrow it down with each filter that was sent.
+  // This way filters can be combined, e.g. /products?category=Electronics&maxPrice=50000
+  let result = products;
+
+  if (price) {
+    result = result.filter((p) => p.price === price);
   }
 
-  if (minPrice && maxPrice) {
-    const productsByPriceRange = products.filter((p) => p.price >= minPrice && p.price <= maxPrice);
-
-    res
-      .status(200)
-      .json({
-        message: `products with price range --- ${minPrice} to ${maxPrice} retrieved successfull`,
-        data: productsByPriceRange,
-      });
-  }
-
-  if(minPrice) {
-    const productsByMinPrice = products.filter((p) => p.price >= minPrice);
-    
-    res
-      .status(200)
-      .json({
-        message: `products with min price --- ${minPrice} retrieved successfull`,
-        data: productsByMinPrice,
-      });
+  if (minPrice) {
+    result = result.filter((p) => p.price >= minPrice);
   }
 
   if (maxPrice) {
-    const productsByMaxPrice = products.filter((p) => p.price <= maxPrice);
-
-    res
-      .status(200)
-      .json({
-        message: `products with max price --- ${maxPrice} retrieved successfull`,
-        data: productsByMaxPrice,
-      });
+    result = result.filter((p) => p.price <= maxPrice);
   }
+
+  // if (priceRange) {
+  //   const [min, max] = priceRange.split("-").map(Number);
+  //   result = result.filter((p) => p.price >= min && p.price <= max);
+  // }
 
   if (category) {
-    const productByCategories = products.filter((p) => p.category === category);
-    
-    res
-      .status(200)
-      .json({
-        message: `products with category --- ${category} retrieved successfull`,
-        data: productByCategories,
-      });
+    result = result.filter(
+      (p) => p.category.toLowerCase() === category.toLowerCase()
+    );
   }
 
-  res
-    .status(200)
-    .json({ message: "All products retrieved successfully", data: products });
+  // Only ONE response is sent per request.
+  res.status(200).json({
+    message: "Products retrieved successfully",
+    count: result.length,
+    data: result,
+  });
 });
 
 app.get("/products/:id", (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const foundProduct = products.find((p: any) => {
-    return p.id === id;
-  });
+  const foundProduct = products.find((p) => p.id === id);
 
-  res
-    .status(200)
-    .json({
-      message: `Product with id ------- ${id} retrieved successfully`,
-      id: id,
-      data: foundProduct,
-    });
+  if (!foundProduct) {
+    return res.status(404).json({ message: `Product with id ${id} not found` });
+  }
+
+  res.status(200).json({
+    message: `Product with id ${id} retrieved successfully`,
+    data: foundProduct,
+  });
 });
 
 // app.get("/price", (req: Request, res: Response) => {
@@ -267,6 +282,51 @@ app.get("/products/:id", (req: Request, res: Response) => {
 //   });
 // });
 
-// app.listen(PORT, () => {
-//   console.log(`Server is running on port ${PORT}`);
-// });
+
+app.post("/products", (req: Request, res: Response) => {
+  const { name, price, category } = req.body ?? {};
+
+  // Basic validation: these fields are required
+  if (!name || typeof price !== "number" || !category) {
+    return res.status(400).json({
+      message: "name, price (number) and category are required",
+    });
+  }
+
+  // Give the new product the next available id
+  const nextId = products.length ? Math.max(...products.map((p) => p.id)) + 1 : 1;
+
+  const newProduct: Product = {
+    slug: name.toLowerCase().trim().replace(/\s+/g, "-"),
+    description: "",
+    discountPrice: null,
+    brand: "",
+    sku: "",
+    stock: 0,
+    rating: 0,
+    reviews: 0,
+    images: [],
+    colors: [],
+    isFeatured: false,
+    isAvailable: true,
+    ...req.body, // values sent by the client override the defaults above
+    id: nextId, // the server always decides the id
+    createdAt: new Date().toISOString(),
+  };
+
+  // push() changes the real products array, so the new product is kept
+  products.push(newProduct);
+
+  res.status(201).json({ message: "Product added successfully", data: newProduct });
+});
+
+app.listen(PORT, async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('Connection has been established successfully.');
+  } catch (error) {
+    console.error('Unable to connect to the database:', error);
+  }
+
+  console.log(`Server is running on port ${PORT}`);
+});
